@@ -1,0 +1,53 @@
+MODULE main
+
+VAR
+
+s: boolean;
+p0: process user(s, FALSE, p1.y);
+p1: process user(s, TRUE, p0.y);
+
+ASSIGN
+
+init(s) := FALSE;
+
+LTLSPEC
+G (!(p0.state = critical & p1.state = critical))
+
+LTLSPEC
+G ((p0.state = asking -> F p0.state = critical) & ( p1.state = asking -> F p1.state = critical))
+
+
+MODULE user(s, i, yX)
+
+VAR
+
+y: boolean;
+state: {idle, asking, critical};
+
+ASSIGN
+
+init(state) := idle;
+init(y) := FALSE;
+
+next(state) :=
+case
+        state = idle : {idle, asking};
+        state = asking & yX & s = i : asking;
+		state = asking : critical;
+        state = critical : idle;
+esac;
+
+next(y) :=
+case
+	state = idle : TRUE;
+	state = critical : FALSE;
+	TRUE : y;
+esac;
+
+next(s) :=
+case
+	state = idle : i;
+	TRUE : s;
+esac;
+FAIRNESS
+	running

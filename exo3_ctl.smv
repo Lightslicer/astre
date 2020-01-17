@@ -1,0 +1,107 @@
+MODULE main
+VAR
+	Enable_hwy : boolean;
+	Enable_small : boolean;
+	c1 : capteur();
+	high : highway(c1, timer, Enable_hwy, Enable_small); -- small
+	small : smallway(c1, timer, Enable_hwy, Enable_small);
+	timer : timer(c1,high,small, Enable_hwy, Enable_small);
+ASSIGN
+	init(Enable_small) := FALSE;
+	init(Enable_hwy) := FALSE;
+
+SPEC
+AG (high.hw_color = GREEN -> (small.sw_color = YELLOW | small.sw_color = RED) 
+	& small.sw_color = GREEN -> (high.hw_color = YELLOW | high.hw_color = RED))
+--SPEC
+--AG AF(high.hw_color = GREEN )
+--SPEC
+--AG AF(small.sw_color = GREEN)
+--SPEC
+--AG !(high.hw_color = GREEN & small.sw_color = GREEN)
+SPEC
+AG ((high.hw_color = GREEN -> AX(AF high.hw_color = GREEN)) & (small.sw_color = GREEN -> AX (AF small.sw_color = GREEN)))
+--SPEC
+--AG (AF(high.hw_color = GREEN) & AF(small.sw_color = GREEN))
+SPEC
+AG ((c1.sensor_state = C_P & timer.timer_state = START) -> (AF A [timer.timer_state != START U timer.timer_state = LONG] -> high.hw_color = GREEN))
+
+MODULE capteur
+VAR
+	sensor_state : {C_P, C_A};
+ASSIGN
+	init(sensor_state) := C_A;
+
+	next(sensor_state) := {C_P,C_A};
+FAIRNESS
+	sensor_state=C_P
+
+MODULE timer(capteur,high,small, Enable_hwy, Enable_small)
+VAR
+	RESTART : boolean;
+	timer_state : {START, SHORT, LONG};
+ASSIGN
+	init(RESTART) := FALSE;
+
+	init(timer_state) := START;
+
+	next(RESTART) := 
+	case
+		high.hw_color = GREEN & capteur.sensor_state = C_P & timer_state = LONG : TRUE;
+		small.sw_color = GREEN & (capteur.sensor_state = C_A | timer_state = LONG) : TRUE;
+		Enable_small = TRUE : TRUE;
+		TRUE									       : FALSE;
+	esac;
+
+	next(timer_state) :=
+	case
+		RESTART = TRUE : START;
+		timer_state = START : {START,SHORT};
+		timer_state = SHORT : {SHORT,LONG};
+		TRUE		   : timer_state;
+	esac;
+FAIRNESS
+	timer_state=LONG
+
+MODULE highway(capteur, timer, Enable_hwy, Enable_small)
+VAR
+
+	hw_color : {GREEN, YELLOW, RED};
+ASSIGN
+
+	init(hw_color) := GREEN;
+
+	next(hw_color) := 
+	case
+		hw_color = GREEN  & (capteur).sensor_state = C_P & timer.timer_state = LONG  : YELLOW;
+		hw_color = YELLOW & timer.timer_state = SHORT : RED;
+		hw_color = RED & Enable_hwy : GREEN;
+		TRUE						: hw_color;
+	esac;
+
+	next(Enable_small) :=
+	case
+		hw_color = YELLOW & timer.timer_state = SHORT : TRUE;
+		TRUE										  : Enable_small;
+	esac;
+
+MODULE smallway(capteur, timer, Enable_hwy, Enable_small)
+VAR
+	sw_color : {GREEN, YELLOW, RED};
+ASSIGN
+
+	init(sw_color) := RED;
+
+	next(sw_color) := 
+	case
+		sw_color  = GREEN & (capteur.sensor_state = C_A | timer.timer_state = LONG) : YELLOW;
+		sw_color = YELLOW & timer.timer_state = SHORT : RED ;
+		sw_color = RED & Enable_small : GREEN;
+		TRUE						: sw_color;
+	esac;
+
+	next(Enable_hwy) :=
+	case
+		sw_color = YELLOW & timer.timer_state = SHORT : TRUE;
+		TRUE 										  : Enable_hwy;
+	esac;

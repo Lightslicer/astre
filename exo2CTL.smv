@@ -1,0 +1,55 @@
+MODULE main
+VAR
+	demP : boolean;
+	demQ : boolean;
+	i : boolean;
+	proc0 : process user(demP, demQ, FALSE);
+	proc1 : process user(demP, demQ, TRUE);
+
+ASSIGN
+init(demP) := FALSE;
+init(demQ) := FALSE;
+
+SPEC
+AG !(proc0.state = critical & proc1.state = critical)
+
+SPEC
+AG (proc0.state = asking -> AF proc0.state = critical & proc1.state = asking -> AF proc1.state = critical)
+
+SPEC
+AG (proc0.state = asking -> EF proc0.state = critical & proc1.state = asking -> EF proc1.state = critical)
+
+--SPEC
+--AG (proc0.state = asking & X proc1.state = asking -> AF (X proc0.state = critical & XX proc1.state = asking) & proc1.state = asking & X proc0.state = asking -> AF (X proc1.state = critical & XX proc0.state = asking) )
+
+MODULE user(demP, demQ, i)
+VAR
+	state : {idle, asking, critical, exiting};
+
+ASSIGN
+init(state) := idle;
+
+next(state) :=
+case
+	state = idle : {idle, asking};
+	state = asking & !i & !demQ : critical;
+	state = asking & i & !demP : critical;
+	state = critical : {critical, exiting};
+	state = exiting: idle;
+	TRUE : state;
+esac;
+next(demP) :=
+case
+	state = idle & !i & !demQ : TRUE;
+	state = exiting & !i: FALSE;
+	TRUE : demP;
+esac;
+
+next(demQ) :=
+case
+	state = idle & i & !demP : TRUE;
+	state = exiting & i: FALSE;
+	TRUE : demQ;
+esac;
+FAIRNESS
+	running
