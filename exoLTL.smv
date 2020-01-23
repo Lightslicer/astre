@@ -10,31 +10,39 @@ ASSIGN
 
 init(s) := FALSE;
 
+-- exclusion mutuelle
 LTLSPEC
 G (!(p0.state = critical & p1.state = critical))
 
+-- Absence de famine. Nécessite FAIRNESS running pour être vérifié
 LTLSPEC
-G ((p0.state = asking -> F p0.state = critical) & ( p1.state = asking -> F p1.state = critical))
+G ( (p0.state = asking -> F p0.state = critical) & ( p1.state = asking -> F p1.state = critical) )
+
+-- Chaque processus entre en section critique (SC) infiniment souvent. Nécessite FAIRNESS running pour être vérifié
+LTLSPEC
+G (F(p0.state = critical) & F(p1.state = critical))
 
 
+-- yX est la variable locale de l'autre processus (y0 ou y1)
 MODULE user(s, i, yX)
 
 VAR
 
-y: boolean;
+y: boolean; -- notre variable locale indiquant si on est en état critique ou non
 state: {idle, asking, critical};
 
 ASSIGN
 
+-- on commence dans l'état non critique, avec notre variable valant 1 (true)
 init(state) := idle;
-init(y) := FALSE;
+init(y) := TRUE;
 
 next(state) :=
 case
-        state = idle : {idle, asking};
-        state = asking & yX & s = i : asking;
-		state = asking : critical;
-        state = critical : idle;
+        state = idle : asking; -- l'état va demander l'accès à la SC
+        state = asking & yX & s = i : asking; -- boucle while
+	state = asking : critical; -- si on est sorti de la boucle while on va en SC
+        state = critical : idle; -- une seule unité de temps en SC et on repart en idle
 esac;
 
 next(y) :=
@@ -49,5 +57,6 @@ case
 	state = idle : i;
 	TRUE : s;
 esac;
+
 FAIRNESS
-	running
+	running;

@@ -2,25 +2,30 @@ MODULE main
 VAR
 	demP : boolean;
 	demQ : boolean;
-	i : boolean;
-	proc0 : process user(demP, demQ, FALSE);
-	proc1 : process user(demP, demQ, TRUE);
+	-- le booléen est là pour différencier les processus pour éviter l'interblocage
+	procP : process user(demP, demQ, FALSE);
+	procQ : process user(demP, demQ, TRUE);
 
 ASSIGN
 init(demP) := FALSE;
 init(demQ) := FALSE;
 
+-- P1 : exclusion mutuelle garantie
 SPEC
-AG !(proc0.state = critical & proc1.state = critical)
+AG !(procP.state = critical & procQ.state = critical)
 
+-- P2 : tout proc demandant accès à la SC finira (forcément) par l'obtenir
 SPEC
-AG (proc0.state = asking -> AF proc0.state = critical & proc1.state = asking -> AF proc1.state = critical)
+AG (procP.state = asking -> AF (procP.state = critical) & procQ.state = asking -> AF (procQ.state = critical))
 
+-- P3 : tout proc demandant accès à la SC pourra (potentiellement) l'obtenir
 SPEC
-AG (proc0.state = asking -> EF proc0.state = critical & proc1.state = asking -> EF proc1.state = critical)
+AG (procP.state = asking -> EF procP.state = critical & procQ.state = asking -> EF procQ.state = critical)
 
---SPEC
---AG (proc0.state = asking & X proc1.state = asking -> AF (X proc0.state = critical & XX proc1.state = asking) & proc1.state = asking & X proc0.state = asking -> AF (X proc1.state = critical & XX proc0.state = asking) )
+-- P4 : l'ordre d'accès à la SC respecte l'ordre des demandes d'accès
+SPEC
+AG ( (procP.state = asking & AX AF procQ.state = asking & (procQ.state = idle | procQ.state = exiting)) -> AF(A[procQ.state != critical U procP.state = critical]) & (procQ.state = asking & AX AF procP.state = asking & (procP.state = idle | procP.state = exiting)) -> AF(A[procP.state != critical U procQ.state = critical]))
+
 
 MODULE user(demP, demQ, i)
 VAR
@@ -31,25 +36,25 @@ init(state) := idle;
 
 next(state) :=
 case
-	state = idle : {idle, asking};
-	state = asking & !i & !demQ : critical;
-	state = asking & i & !demP : critical;
+	state = idle : asking;
+	state = asking & !i & !demQ : critical; -- on est dans procP (!i) et procQ ne demande pas l'accès critique (!demQ)
+	state = asking & i & !demP : critical;  -- on est dans procQ (i) et procP ne demande pas l'accès critique (!demP)
 	state = critical : {critical, exiting};
 	state = exiting: idle;
 	TRUE : state;
 esac;
+
 next(demP) :=
 case
-	state = idle & !i & !demQ : TRUE;
-	state = exiting & !i: FALSE;
-	TRUE : demP;
+	state = idle & !i : TRUE; -- au début de la boucle, on initialise à TRUE
+	state = exiting & !i: FALSE; -- quand on sort de la section critique, on repasse à FALSE
+	TRUE : demP; -- dans tous les autres cas (asking et critical, ou un autre proc) on ne change pas demP 
 esac;
 
+-- même procédé pour demQ, seul l'identifiant i change
 next(demQ) :=
 case
-	state = idle & i & !demP : TRUE;
+	state = idle & i : TRUE;
 	state = exiting & i: FALSE;
 	TRUE : demQ;
 esac;
-FAIRNESS
-	running

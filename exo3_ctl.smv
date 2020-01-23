@@ -3,26 +3,24 @@ VAR
 	Enable_hwy : boolean;
 	Enable_small : boolean;
 	c1 : capteur();
-	high : highway(c1, timer, Enable_hwy, Enable_small); -- small
+	high : highway(c1, timer, Enable_hwy, Enable_small);
 	small : smallway(c1, timer, Enable_hwy, Enable_small);
 	timer : timer(c1,high,small, Enable_hwy, Enable_small);
 ASSIGN
 	init(Enable_small) := FALSE;
 	init(Enable_hwy) := FALSE;
 
+-- si un feu est GREEN l'autre est forcément ORANGE ou RED 
 SPEC
 AG (high.hw_color = GREEN -> (small.sw_color = YELLOW | small.sw_color = RED) 
 	& small.sw_color = GREEN -> (high.hw_color = YELLOW | high.hw_color = RED))
---SPEC
---AG AF(high.hw_color = GREEN )
---SPEC
---AG AF(small.sw_color = GREEN)
---SPEC
---AG !(high.hw_color = GREEN & small.sw_color = GREEN)
+
+-- chaque feu repassera dans l'état GREEN
+-- ici on part de l'état GREEN pour respecter le fait qu'il "repasse", ce qui implique qu'il est dedans
 SPEC
 AG ((high.hw_color = GREEN -> AX(AF high.hw_color = GREEN)) & (small.sw_color = GREEN -> AX (AF small.sw_color = GREEN)))
---SPEC
---AG (AF(high.hw_color = GREEN) & AF(small.sw_color = GREEN))
+
+-- une voiture restant suffisamment longtemps en attente d'accès finit par avoir accès
 SPEC
 AG ((c1.sensor_state = C_P & timer.timer_state = START) -> (AF A [timer.timer_state != START U timer.timer_state = LONG] -> high.hw_color = GREEN))
 
@@ -33,6 +31,7 @@ ASSIGN
 	init(sensor_state) := C_A;
 
 	next(sensor_state) := {C_P,C_A};
+-- contrainte de Fairness pour simuler le passage ponctuel d'une voiture sur la petite route (C_P)
 FAIRNESS
 	sensor_state=C_P
 
@@ -60,6 +59,7 @@ ASSIGN
 		timer_state = SHORT : {SHORT,LONG};
 		TRUE		   : timer_state;
 	esac;
+-- contrainte de Fairness pour s'assurer que le timer finisse un jour (LONG)
 FAIRNESS
 	timer_state=LONG
 
